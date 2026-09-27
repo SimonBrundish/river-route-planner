@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>River Route Planner</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --deep:#0F2A2E; --teal:#1B4B43; --water:#3AAFA9; --sand:#E8DCC8;
+    --paper:#F4F7F6; --ink:#10201F; --flag:#FF7A45; --line:rgba(15,42,46,.12);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--deep);-webkit-tap-highlight-color:transparent;
+  }
+  #app{position:relative;display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+  #map{flex:1;min-height:0;background:#1c2e2c}
+
+  /* search */
+  #searchWrap{position:absolute;top:10px;left:10px;right:10px;z-index:1200;max-width:520px}
+  #searchForm{display:flex;gap:6px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.28)}
+  #searchInput{flex:1;border:none;outline:none;font-size:16px;padding:8px 10px;background:transparent;color:var(--ink)}
+  #searchBtn{border:none;background:var(--water);color:#06201d;font-size:17px;font-weight:800;width:40px;border-radius:9px;cursor:pointer}
+  #searchResults{list-style:none;margin:6px 0 0;padding:0;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.28)}
+  #searchResults li{padding:10px 12px;font-size:.83rem;border-top:1px solid var(--line);cursor:pointer;line-height:1.35}
+  #searchResults li:first-child{border-top:none}
+  #searchResults li:active{background:var(--paper)}
+  #searchResults li.muted{color:#7a8a89;cursor:default}
+
+  /* panel */
+  #panel{
+    flex-shrink:0;background:#fff;border-top-left-radius:18px;border-top-right-radius:18px;
+    margin-top:-18px;position:relative;z-index:1100;padding:8px 14px 16px;
+    max-height:52dvh;overflow-y:auto;box-shadow:0 -6px 24px rgba(0,0,0,.20);
+  }
+  #grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:2px auto 6px}
+  .brand{display:flex;align-items:center;gap:6px;font-weight:800;font-size:.72rem;
+    color:var(--teal);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+  #stats{display:flex;gap:8px;margin-bottom:10px}
+  .stat{flex:1;background:var(--paper);border-radius:12px;padding:9px 6px;text-align:center}
+  .stat .val{font-size:1.3rem;font-weight:800;color:var(--teal);line-height:1.05}
+  .stat .lab{font-size:.6rem;color:#5b6b6a;margin-top:3px;text-transform:uppercase;letter-spacing:.05em}
+  #status{font-size:.72rem;color:#215d7a;background:#e6f0f5;border-radius:8px;padding:7px 10px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  #status[hidden]{display:none}
+  #status .spin{width:12px;height:12px;flex-shrink:0;border:2px solid #b8d4e2;border-top-color:#215d7a;border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #warn{font-size:.74rem;color:#8a3b2c;background:#f7e6df;border-radius:8px;padding:7px 9px;margin-bottom:8px}
+  #straightNote{font-size:.7rem;color:#7a6320;background:#f6efdc;border-radius:8px;padding:7px 9px;margin-bottom:8px;line-height:1.45;cursor:pointer}
+  #straightNote b{color:#5c4b12}
+  .row{display:flex;gap:8px;margin-bottom:8px}
+  .modeBtn{flex:1;padding:11px 6px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:.78rem;font-weight:700;background:#fff;color:#5b6b6a;cursor:pointer}
+  .modeBtn.active{background:var(--teal);border-color:var(--teal);color:#fff}
+  #portageModeBtn.active{background:#E0921E;border-color:#E0921E}
+  .followToggle{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;
+    font-size:.75rem;font-weight:700;background:#fff;color:#5b6b6a;cursor:pointer;margin-bottom:8px}
+  .followToggle.on{background:#e6f3f1;border-color:var(--water);color:var(--teal)}
+  .shareBtn{width:100%;border:none;border-radius:10px;padding:12px;font-size:.82rem;font-weight:800;
+    background:var(--teal);color:#fff;cursor:pointer;margin-bottom:8px}
+  .shareBtn:active{background:var(--deep)}
+  #finishOut{font-weight:700;color:var(--teal)}
+  #shareInfo{font-size:.7rem;color:#5b6b6a;background:var(--paper);border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  #shareInfo[hidden]{display:none}
+  #shareInfo a{color:var(--teal)}
+  .ghost{flex:1;padding:10px 6px;border:1px solid var(--line);border-radius:10px;background:#fff;
+    font-size:.75rem;font-weight:600;color:#42514f;cursor:pointer}
+  .ghost.danger{color:#8a3b2c;background:#faf0ec;border-color:#f0ddd5}
+  .moreToggle{width:100%;border:none;background:var(--paper);border-radius:10px;padding:10px;
+    font-size:.78rem;font-weight:700;color:var(--teal);cursor:pointer;margin-bottom:8px}
+  .fieldRow{display:flex;gap:8px;margin-bottom:8px}
+  .fieldRow label{flex:1;font-size:.66rem;color:#5b6b6a;display:flex;flex-direction:column;gap:4px;font-weight:600}
+  .fieldRow input,.fieldRow select{padding:8px;border:1px solid var(--line);border-radius:8px;font-size:16px;background:#fff;color:var(--ink)}
+  .saveRow{display:flex;gap:8px;margin:2px 0 8px}
+  .saveRow input{flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:16px}
+  .saveRow button{padding:8px 16px;border:none;border-radius:8px;background:var(--water);color:#06201d;font-weight:800;cursor:pointer}
+  #savedList{list-style:none;margin:0;padding:0}
+  #savedList li{display:flex;align-items:center;gap:8px;padding:9px 4px;border-top:1px solid var(--line);font-size:.82rem}
+  #savedList li.muted{color:#7a8a89;justify-content:center;border-top:none}
+  .savedName{flex:1;cursor:pointer;color:var(--teal);font-weight:600}
+  .savedMeta{font-size:.68rem;color:#8b9a99;font-weight:400}
+  #savedList .x{border:none;background:transparent;color:#8a3b2c;font-size:1rem;cursor:pointer;padding:2px 6px}
+  #hint{font-size:.68rem;color:#8b9a99;margin:8px 0 0;text-align:center;line-height:1.5}
+
+  /* leaflet tweaks */
+  .leaflet-top.leaflet-right{margin-top:58px}
+  .leaflet-control-layers,.leaflet-bar{box-shadow:0 2px 10px rgba(0,0,0,.25);border:none}
+  .leaflet-bar a{color:var(--teal)}
+  .vtx{border-radius:50%;border:2px solid #fff;background:var(--flag);box-shadow:0 1px 5px rgba(0,0,0,.45)}
+  .vtx.start{background:var(--water)}
+  .vtx.end{background:#C94F3D}
+  .portage-marker{display:flex;align-items:center;justify-content:center;background:#E0921E;color:#fff;
+    font-weight:800;font-size:14px;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+  .popupBtn{border:none;background:var(--teal);color:#fff;padding:7px 12px;border-radius:7px;font-weight:700;cursor:pointer;font-size:.8rem}
+  .popupBtn.danger{background:#C94F3D}
+  .portagePop label{display:flex;flex-direction:column;font-size:.72rem;gap:4px;margin-bottom:8px;color:#5b6b6a;font-weight:600}
+  .portagePop input{padding:6px;border:1px solid var(--line);border-radius:6px;font-size:14px;width:90px}
+
+  @media(min-width:760px){
+    #app{flex-direction:row}
+    #map{order:1}
+    #panel{order:2;width:380px;max-height:none;height:100dvh;margin-top:0;
+      border-radius:0;box-shadow:-2px 0 24px rgba(0,0,0,.14)}
+    #searchWrap{right:auto;width:400px}
+    .leaflet-top.leaflet-right{margin-top:0}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+
+  <div id="searchWrap">
+    <form id="searchForm">
+      <input id="searchInput" type="text" placeholder="Search for a town, river or bridge…" autocomplete="off">
+      <button type="submit" id="searchBtn" aria-label="Search">&#9906;</button>
+    </form>
+    <ul id="searchResults"></ul>
+  </div>
+
+  <div id="panel">
+    <div id="grip"></div>
+    <div class="brand">&#127966; River Route Planner</div>
+
+    <div id="stats">
+      <div class="stat"><div class="val" id="distVal">0.00</div><div class="lab" id="distLab">miles</div></div>
+      <div class="stat"><div class="val" id="timeVal">0:00</div><div class="lab" id="timeLab">est. time</div></div>
+      <div class="stat"><div class="val" id="portageVal">0</div><div class="lab">portages</div></div>
+    </div>
+
+    <div id="status" hidden><span class="spin"></span><span id="statusText">Tracing the waterway…</span></div>
+    <div id="warn" hidden>The current against you is stronger than your paddling speed &mdash; this route isn&rsquo;t achievable at these numbers.</div>
+    <div id="straightNote" hidden></div>
+
+    <div class="row">
+      <button class="modeBtn active" id="routeModeBtn" type="button">&#43; Route point</button>
+      <button class="modeBtn" id="portageModeBtn" type="button">&#9888; Weir / lock</button>
+    </div>
+    <button id="followToggle" class="followToggle on" type="button">&#127754; Follow the water: ON</button>
+    <div class="row">
+      <button class="ghost" id="undoBtn" type="button">Undo point</button>
+      <button class="ghost" id="locateBtn" type="button">&#9678; My location</button>
+      <button class="ghost danger" id="clearBtn" type="button">Clear</button>
+    </div>
+    <button id="shareBtn" class="shareBtn" type="button">&#128228; Share trip &amp; pick-up</button>
+    <div id="shareInfo" hidden></div>
+
+    <button id="moreToggle" class="moreToggle" type="button">Trip settings &amp; saved routes &#9662;</button>
+    <div id="more" hidden>
+      <div class="fieldRow">
+        <label>Paddling speed
+          <input type="number" id="speedInput" value="3.5" min="0.1" step="0.1" inputmode="decimal">
+        </label>
+        <label>Units
+          <select id="unitSelect">
+            <option value="mi">mph / miles</option>
+            <option value="km">km/h / km</option>
+          </select>
+        </label>
+      </div>
+      <div class="fieldRow">
+        <label>Current (+ helps, &minus; against)
+          <input type="number" id="currentInput" value="0" step="0.1" inputmode="decimal">
+        </label>
+        <label>Minutes per portage
+          <input type="number" id="portageTimeInput" value="10" min="0" step="1" inputmode="numeric">
+        </label>
+      </div>
+      <div class="fieldRow">
+        <label>Start time (for the pick-up estimate)
+          <input type="time" id="startInput">
+        </label>
+        <label>Off the water about
+          <input type="text" id="finishOut" value="—" readonly tabindex="-1">
+        </label>
+      </div>
+      <div class="saveRow">
+        <input type="text" id="routeName" placeholder="Name this route" autocomplete="off">
+        <button id="saveBtn" type="button">Save</button>
+      </div>
+      <ul id="savedList"></ul>
+    </div>
+
+    <p id="hint">Tap along the river or canal every few hundred metres &mdash; the line snaps to the water and
+      follows its bends. Drag any point to nudge it. First point is your put-in, last is your take-out.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // Optional: paste a Mapbox token here to add Mapbox Outdoors / Satellite base layers.
+  var MAPBOX_TOKEN = "";
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ================= map + layers ================= */
+  var map = L.map("map", { zoomControl: false, doubleClickZoom: false })
+    .setView([53.2, -1.9], 7);
+  L.control.zoom({ position: "bottomright" }).addTo(map);
+
+  var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+  });
+  var esriImagery = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 19, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" });
+  var esriLabels = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 19 });
+  var satellite = L.layerGroup([esriImagery, esriLabels]);
+  var baseLayers = { "Satellite": satellite, "Street map": osm };
+
+  if (MAPBOX_TOKEN) {
+    baseLayers["Mapbox outdoors"] = L.tileLayer(
+      "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/512/{z}/{x}/{y}@2x?access_token=" + MAPBOX_TOKEN,
+      { tileSize: 512, zoomOffset: -1, maxZoom: 19, attribution: "&copy; Mapbox &copy; OpenStreetMap" });
+    baseLayers["Mapbox satellite"] = L.tileLayer(
+      "https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token=" + MAPBOX_TOKEN,
+      { tileSize: 512, zoomOffset: -1, maxZoom: 19, attribution: "&copy; Mapbox" });
+  }
+
+  satellite.addTo(map);
+  L.control.layers(baseLayers, null, { position: "topright" }).addTo(map);
+  L.control.scale({ imperial: true, metric: true, position: "bottomleft" }).addTo(map);
+
+  /* ================= geometry helpers ================= */
+  function haversine(a, b) {
+    var R = 6371000, rad = Math.PI / 180;
+    var lat1 = a.lat, lng1 = a.lng, lat2 = b.lat, lng2 = b.lng;
+    var dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function straightLen(pts) {
+    var m = 0;
+    for (var i = 1; i < pts.length; i++) m += haversine(pts[i - 1], pts[i]);
+    return m;
+  }
+  function nearestVertex(latlng, coords) {
+    var best = coords[0], bd = Infinity;
+    for (var i = 0; i < coords.length; i++) {
+      var d = haversine(latlng, coords[i]);
+      if (d < bd) { bd = d; best = coords[i]; }
+    }
+    return best;
+  }
+
+  /* ================= BRouter (waterway routing) ================= */
+  // brouter.de's public server hosts a "river" profile that routes along
+  // waterway=river / canal / stream. One request handles the whole multi-point route.
+  var BROUTER = "https://brouter.de/brouter";
+  var routeCache = {};   // waypoint-string -> { coords:[LatLng], meters } | null
+
+  function brouterKey(pts) {
+    return pts.map(function (p) { return p.lat.toFixed(5) + "," + p.lng.toFixed(5); }).join(";");
+  }
+
+  function fetchRoute(pts) {
+    var key = brouterKey(pts);
+    if (Object.prototype.hasOwnProperty.call(routeCache, key)) return Promise.resolve(routeCache[key]);
+
+    var lonlats = pts.map(function (p) { return p.lng.toFixed(5) + "," + p.lat.toFixed(5); }).join("|");
+    var url = BROUTER + "?lonlats=" + lonlats + "&profile=river&alternativeidx=0&format=geojson";
+
+    var attempt = function (n) {
+      var ctrl = new AbortController();
+      var to = setTimeout(function () { ctrl.abort(); }, 15000);
+      return fetch(url, { signal: ctrl.signal })
+        .then(function (r) { clearTimeout(to); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (j) {
+          var f = j && j.features && j.features[0];
+          if (!f || !f.geometry || !f.geometry.coordinates || f.geometry.coordinates.length < 2) throw new Error("empty");
+          var coords = f.geometry.coordinates.map(function (c) { return L.latLng(c[1], c[0]); });
+          var meters = parseFloat(f.properties && f.properties["track-length"]) || straightLen(coords);
+          return { coords: coords, meters: meters };
+        })
+        .catch(function (e) {
+          clearTimeout(to);
+          if (n > 0) return new Promise(function (res) { setTimeout(res, 700); }).then(function () { return attempt(n - 1); });
+          return null;
+        });
+    };
+
+    return attempt(1).then(function (res) {
+      routeCache[key] = res;
+      return res;
+    });
+  }
+
+  // Reject a route that detours absurdly or snaps far from where you tapped.
+  function routeIsSane(res, pts) {
+    if (!res) return false;
+    var straight = straightLen(pts);
+    var startOff = haversine(res.coords[0], pts[0]);
+    var endOff = haversine(res.coords[res.coords.length - 1], pts[pts.length - 1]);
+    if (startOff > 1800 || endOff > 1800) return false;         // snapped too far from the tap
+    if (res.meters > 20000 && res.meters > straight * 2.5) return false;  // huge detour
+    if (straight < 80) return res.meters < 3000;
+    return res.meters <= straight * 3 + 500;
+  }
+
+  /* ================= route state ================= */
+  var mode = "route";                 // "route" | "portage"
+  var followWater = true;
+  var controlPts = [];                // { marker, ll, seq }
+  var portagePts = [];                // { marker, minutes, seq }
+  var routeMeters = 0;
+  var routeHasGaps = false;
+  var lastFail = false;
+  var seq = 0;
+  var routing = 0;
+  var lastPopupClose = 0;
+
+  var routedLine = L.polyline([], { color: "#FF7A45", weight: 5, opacity: 0.95 }).addTo(map);
+  var straightLine = L.polyline([], { color: "#8a8f8d", weight: 4, opacity: 0.9, dashArray: "6 9" }).addTo(map);
+
+  var portageIcon = L.divIcon({ className: "portage-marker", html: "!", iconSize: [24, 24] });
+  function vtxIcon(kind) { return L.divIcon({ className: "vtx " + kind, iconSize: [16, 16] }); }
+
+  /* ---- control points ---- */
+  function addControlPoint(latlng, opts) {
+    opts = opts || {};
+    var cp = { marker: null, ll: L.latLng(latlng), seq: ++seq };
+    var m = L.marker(cp.ll, { draggable: true, icon: vtxIcon("mid"), keyboard: false });
+    m.on("drag", function () { previewDrag(); });
+    m.on("dragend", function () { cp.ll = m.getLatLng(); scheduleRebuild().then(autosave); });
+    m.bindPopup(function () {
+      var wrap = document.createElement("div");
+      var idx = controlPts.indexOf(cp);
+      var role = idx === 0 ? "Put-in point" : (idx === controlPts.length - 1 ? "Take-out / pick-up point" : "");
+      if (role) {
+        var t = document.createElement("div");
+        t.style.cssText = "font-weight:700;margin-bottom:6px;color:#1B4B43";
+        t.textContent = role;
+        wrap.appendChild(t);
+      }
+      if (idx === controlPts.length - 1 && controlPts.length > 1) {
+        var ll = cp.marker.getLatLng();
+        var a = document.createElement("a");
+        a.href = "https://www.google.com/maps/search/?api=1&query=" + ll.lat.toFixed(5) + "," + ll.lng.toFixed(5);
+        a.target = "_blank"; a.rel = "noopener";
+        a.className = "popupBtn";
+        a.style.cssText = "display:inline-block;text-decoration:none;margin-bottom:8px";
+        a.textContent = "Open pick-up in Maps";
+        wrap.appendChild(a);
+        wrap.appendChild(document.createElement("br"));
+      }
+      var b = document.createElement("button");
+      b.className = "popupBtn danger";
+      b.textContent = "Remove this point";
+      b.onclick = function () { removeControlPoint(cp); map.closePopup(); };
+      wrap.appendChild(b);
+      return wrap;
+    });
+    m.addTo(map);
+    cp.marker = m;
+    controlPts.push(cp);
+    if (!opts.bulk) scheduleRebuild().then(autosave);
+  }
+
+  function removeControlPoint(cp) {
+    var i = controlPts.indexOf(cp);
+    if (i < 0) return;
+    map.removeLayer(cp.marker);
+    controlPts.splice(i, 1);
+    scheduleRebuild().then(autosave);
+  }
+
+  // quick straight preview while a point is being dragged
+  function previewDrag() {
+    routedLine.setLatLngs(controlPts.map(function (cp) { return cp.marker.getLatLng(); }));
+    straightLine.setLatLngs([]);
+  }
+
+  function markerColours() {
+    controlPts.forEach(function (cp, i) {
+      var el = cp.marker.getElement();
+      if (!el) return;
+      el.classList.remove("start", "end", "mid");
+      el.classList.add(i === 0 ? "start" : (i === controlPts.length - 1 ? "end" : "mid"));
+    });
+  }
+
+  /* ---- portage points ---- */
+  function addPortage(latlng, minutes) {
+    var rec = { marker: null, minutes: (minutes == null ? null : minutes), seq: ++seq };
+    var m = L.marker(L.latLng(latlng), { draggable: true, icon: portageIcon });
+    m.on("dragend", function () { recompute(); autosave(); });
+    m.bindPopup(function () { return portagePopup(rec); });
+    m.addTo(map);
+    rec.marker = m;
+    portagePts.push(rec);
+    recompute(); autosave();
+  }
+  function portagePopup(rec) {
+    var wrap = document.createElement("div");
+    wrap.className = "portagePop";
+    var def = parseFloat($("portageTimeInput").value) || 0;
+    var lab = document.createElement("label");
+    lab.textContent = "Delay here (min)";
+    var inp = document.createElement("input");
+    inp.type = "number"; inp.min = "0"; inp.step = "1";
+    inp.value = (rec.minutes != null ? rec.minutes : def);
+    inp.oninput = function () {
+      rec.minutes = inp.value === "" ? null : parseFloat(inp.value);
+      recompute(); autosave();
+    };
+    lab.appendChild(inp);
+    var del = document.createElement("button");
+    del.className = "popupBtn danger";
+    del.textContent = "Remove";
+    del.onclick = function () {
+      var i = portagePts.indexOf(rec);
+      if (i >= 0) { map.removeLayer(rec.marker); portagePts.splice(i, 1); }
+      map.closePopup(); recompute(); autosave();
+    };
+    wrap.appendChild(lab); wrap.appendChild(del);
+    return wrap;
+  }
+
+  /* ---- map interaction ---- */
+  map.on("popupclose", function () { lastPopupClose = Date.now(); });
+  map.on("click", function (e) {
+    if (Date.now() - lastPopupClose < 350) return;
+    if (mode === "route") addControlPoint(e.latlng);
+    else addPortage(e.latlng);
+  });
+
+  /* ================= rebuild (async, coalesced) ================= */
+  var rebuildPending = false, rebuildRunning = false, rebuildWaiters = [];
+  function scheduleRebuild() {
+    return new Promise(function (resolve) {
+      rebuildWaiters.push(resolve);
+      rebuildPending = true;
+      if (!rebuildRunning) runRebuilds();
+    });
+  }
+  function runRebuilds() {
+    rebuildRunning = true;
+    (function loop() {
+      if (rebuildPending) {
+        rebuildPending = false;
+        Promise.resolve().then(rebuild).catch(function (e) { console.warn(e); }).then(loop);
+        return;
+      }
+      rebuildRunning = false;
+      var w = rebuildWaiters; rebuildWaiters = [];
+      w.forEach(function (fn) { try { fn(); } catch (e) {} });
+    })();
+  }
+
+  function setStatus(on, text) {
+    $("status").hidden = !on;
+    if (text) $("statusText").textContent = text;
+  }
+
+  function rebuild() {
+    routing++;
+    var pts = controlPts.map(function (cp) { return cp.marker.getLatLng(); });
+
+    // straight-line cases: hand-drawing, or fewer than 2 points
+    if (!followWater || pts.length < 2) {
+      routedLine.setLatLngs(pts);
+      straightLine.setLatLngs([]);
+      routeMeters = straightLen(pts);
+      routeHasGaps = false; lastFail = false;
+      finishRebuild();
+      return Promise.resolve();
+    }
+
+    setStatus(true, "Tracing the waterway…");
+    var cap = new Promise(function (res) { setTimeout(res, 20000); });
+
+    var work = fetchRoute(pts).then(function (whole) {
+      if (whole && routeIsSane(whole, pts)) {
+        applyWholeRoute(whole);
+        routeHasGaps = false; lastFail = false;
+        return;
+      }
+      // fall back to routing each leg on its own
+      var jobs = [];
+      for (var i = 1; i < pts.length; i++) {
+        (function (pair) { jobs.push(fetchRoute(pair).then(function (r) { return { pair: pair, r: r }; })); })([pts[i - 1], pts[i]]);
+      }
+      return Promise.all(jobs).then(function (legs) {
+        var solids = [], dashes = [], total = 0, gaps = false, anyRouted = false, anyFail = false;
+        legs.forEach(function (leg) {
+          if (leg.r && routeIsSane(leg.r, leg.pair)) {
+            solids.push(leg.r.coords); total += leg.r.meters; anyRouted = true;
+          } else {
+            dashes.push(leg.pair); total += haversine(leg.pair[0], leg.pair[1]);
+            gaps = true;
+            if (!leg.r) anyFail = true;
+          }
+        });
+        routedLine.setLatLngs(solids);
+        straightLine.setLatLngs(dashes);
+        snapMarkersToLegs(solids);
+        routeMeters = total;
+        routeHasGaps = gaps;
+        lastFail = anyFail && !anyRouted;
+      });
+    }).catch(function (e) {
+      console.warn(e);
+      routedLine.setLatLngs([]);
+      straightLine.setLatLngs(pairsOf(pts));
+      routeMeters = straightLen(pts);
+      routeHasGaps = true; lastFail = true;
+    });
+
+    return Promise.race([work, cap.then(function () {
+      // timed out — show what we have as straight lines
+      if (routing > 0) {
+        routedLine.setLatLngs([]);
+        straightLine.setLatLngs(pairsOf(pts));
+        routeMeters = straightLen(pts);
+        routeHasGaps = true; lastFail = true;
+      }
+    })]).then(finishRebuild);
+  }
+
+  function pairsOf(pts) {
+    var out = [];
+    for (var i = 1; i < pts.length; i++) out.push([pts[i - 1], pts[i]]);
+    return out;
+  }
+
+  function applyWholeRoute(whole) {
+    routedLine.setLatLngs(whole.coords);
+    straightLine.setLatLngs([]);
+    routeMeters = whole.meters;
+    // pull the tapped markers onto the traced line
+    if (controlPts.length) {
+      controlPts[0].marker.setLatLng(whole.coords[0]);
+      controlPts[0].ll = whole.coords[0];
+      var last = whole.coords[whole.coords.length - 1];
+      controlPts[controlPts.length - 1].marker.setLatLng(last);
+      controlPts[controlPts.length - 1].ll = last;
+      for (var i = 1; i < controlPts.length - 1; i++) {
+        var v = nearestVertex(controlPts[i].marker.getLatLng(), whole.coords);
+        controlPts[i].marker.setLatLng(v); controlPts[i].ll = v;
+      }
+    }
+  }
+
+  function snapMarkersToLegs(solids) {
+    if (!solids.length) return;
+    var all = [];
+    solids.forEach(function (c) { all = all.concat(c); });
+    controlPts.forEach(function (cp) {
+      var v = nearestVertex(cp.marker.getLatLng(), all);
+      if (haversine(v, cp.marker.getLatLng()) < 400) { cp.marker.setLatLng(v); cp.ll = v; }
+    });
+  }
+
+  function finishRebuild() {
+    routing = Math.max(0, routing - 1);
+    markerColours();
+    updateNote();
+    recompute();
+    if (routing <= 0) {
+      if (lastFail) {
+        setStatus(true, "Couldn't reach the routing service — showing straight lines");
+        setTimeout(function () { if (routing <= 0) setStatus(false); }, 4000);
+      } else {
+        setStatus(false);
+      }
+    }
+  }
+
+  function updateNote() {
+    var note = $("straightNote");
+    if (!routeHasGaps) { note.hidden = true; return; }
+    note.hidden = false;
+    note.innerHTML = (lastFail
+      ? "Couldn&rsquo;t reach the routing service just now, so the line is straight."
+      : "Dashed legs couldn&rsquo;t be traced on a waterway &mdash; tap closer to the channel, or add a point where waterways join.")
+      + " <b>Tap here to retry</b>, or turn &ldquo;Follow the water&rdquo; off to draw by hand.";
+  }
+
+  /* ================= stats ================= */
+  var lastTotalMinutes = 0;
+
+  function fmtTime(mins) {
+    var h = Math.floor(mins / 60), m = Math.round(mins % 60);
+    if (m === 60) { h += 1; m = 0; }
+    return h + ":" + String(m).padStart(2, "0");
+  }
+  function addToHHMM(hhmm, mins) {
+    var parts = String(hhmm).split(":");
+    var base = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+    var t = Math.round(base + mins);
+    var day = Math.floor(t / 1440);
+    t = ((t % 1440) + 1440) % 1440;
+    var s = String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+    return { hm: s, plusDays: day };
+  }
+  function recompute() {
+    var unit = $("unitSelect").value;
+    var speed = parseFloat($("speedInput").value) || 0;
+    var current = parseFloat($("currentInput").value) || 0;
+    var defMin = parseFloat($("portageTimeInput").value) || 0;
+
+    var distDisplay = unit === "mi" ? routeMeters / 1609.344 : routeMeters / 1000;
+    $("distVal").textContent = distDisplay.toFixed(2);
+    $("distLab").textContent = unit === "mi" ? "miles" : "km";
+
+    var portageCount = portagePts.length;
+    $("portageVal").textContent = portageCount;
+    var portageMin = portagePts.reduce(function (s, r) {
+      return s + ((r.minutes != null && !isNaN(r.minutes)) ? r.minutes : defMin);
+    }, 0);
+
+    var startV = $("startInput").value;
+    var eff = speed + current;
+
+    if (distDisplay > 0 && eff <= 0) {
+      lastTotalMinutes = NaN;
+      $("timeVal").textContent = "--";
+      $("timeLab").textContent = "est. time";
+      $("finishOut").value = "not achievable";
+      $("warn").hidden = false;
+      return;
+    }
+    $("warn").hidden = true;
+
+    var paddleMin = (distDisplay > 0 && eff > 0) ? (distDisplay / eff) * 60 : 0;
+    lastTotalMinutes = paddleMin + portageMin;
+    var show = (distDisplay > 0 || portageCount > 0);
+    $("timeVal").textContent = show ? fmtTime(lastTotalMinutes) : "0:00";
+
+    if (show && startV) {
+      var f = addToHHMM(startV, lastTotalMinutes);
+      var label = "off water ~" + f.hm + (f.plusDays ? " +" + f.plusDays + "d" : "");
+      $("timeLab").textContent = label;
+      $("finishOut").value = f.hm + (f.plusDays ? " (+" + f.plusDays + "d)" : "");
+    } else {
+      $("timeLab").textContent = "est. time";
+      $("finishOut").value = "—";
+    }
+
+    if (pendingShareSummary && show) { pendingShareSummary = false; renderSharedSummary(); }
+  }
+
+  /* ================= controls ================= */
+  function setMode(m) {
+    mode = m;
+    $("routeModeBtn").classList.toggle("active", m === "route");
+    $("portageModeBtn").classList.toggle("active", m === "portage");
+  }
+  $("routeModeBtn").onclick = function () { setMode("route"); };
+  $("portageModeBtn").onclick = function () { setMode("portage"); };
+
+  $("followToggle").onclick = function () {
+    followWater = !followWater;
+    this.classList.toggle("on", followWater);
+    this.innerHTML = "&#127754; Follow the water: " + (followWater ? "ON" : "OFF");
+    scheduleRebuild().then(autosave);
+  };
+
+  $("straightNote").onclick = function () {
+    routeCache = {};
+    scheduleRebuild().then(autosave);
+  };
+
+  $("undoBtn").onclick = function () {
+    var best = null, isCtrl = false;
+    controlPts.forEach(function (r) { if (!best || r.seq > best.seq) { best = r; isCtrl = true; } });
+    portagePts.forEach(function (r) { if (!best || r.seq > best.seq) { best = r; isCtrl = false; } });
+    if (!best) return;
+    if (isCtrl) { removeControlPoint(best); }
+    else {
+      var i = portagePts.indexOf(best);
+      if (i >= 0) { map.removeLayer(best.marker); portagePts.splice(i, 1); }
+      recompute(); autosave();
+    }
+  };
+
+  $("clearBtn").onclick = function () {
+    if ((controlPts.length || portagePts.length) &&
+        !confirm("Clear the whole route and every portage point?")) return;
+    controlPts.splice(0).forEach(function (p) { map.removeLayer(p.marker); });
+    portagePts.splice(0).forEach(function (p) { map.removeLayer(p.marker); });
+    routedLine.setLatLngs([]); straightLine.setLatLngs([]);
+    routeMeters = 0; routeHasGaps = false; lastFail = false;
+    $("straightNote").hidden = true;
+    recompute(); autosave();
+  };
+
+  ["speedInput", "unitSelect", "currentInput", "portageTimeInput", "startInput"].forEach(function (id) {
+    $(id).addEventListener("input", function () { recompute(); autosave(); });
+    $(id).addEventListener("change", function () { recompute(); autosave(); });
+  });
+
+  /* ================= share the trip ================= */
+  var pendingShareSummary = false;
+
+  function round5(n) { return Math.round(n * 1e5) / 1e5; }
+
+  function encodeTrip() {
+    var d = {
+      r: controlPts.map(function (cp) { return [round5(cp.ll.lat), round5(cp.ll.lng)]; }),
+      p: portagePts.map(function (x) {
+        var ll = x.marker.getLatLng();
+        return [round5(ll.lat), round5(ll.lng), (x.minutes == null ? null : x.minutes)];
+      }),
+      s: $("speedInput").value, c: $("currentInput").value, pm: $("portageTimeInput").value,
+      u: $("unitSelect").value, f: followWater ? 1 : 0, st: $("startInput").value || ""
+    };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(d))))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function decodeTrip(s) {
+    try {
+      s = s.replace(/-/g, "+").replace(/_/g, "/");
+      while (s.length % 4) s += "=";
+      var d = JSON.parse(decodeURIComponent(escape(atob(s))));
+      return {
+        unit: d.u, speed: d.s, current: d.c, portageMinutes: d.pm,
+        followWater: !!d.f, startTime: d.st || "",
+        route: (d.r || []).map(function (a) { return [a[0], a[1]]; }),
+        portages: (d.p || []).map(function (a) { return { lat: a[0], lng: a[1], minutes: (a[2] == null ? null : a[2]) }; })
+      };
+    } catch (e) { return null; }
+  }
+
+  function tripLink() {
+    return location.origin + location.pathname + "#r=" + encodeTrip();
+  }
+
+  function reverseName(ll) {
+    var ctrl = new AbortController();
+    var to = setTimeout(function () { ctrl.abort(); }, 3500);
+    return fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&lat=" +
+        ll.lat + "&lon=" + ll.lng, { signal: ctrl.signal })
+      .then(function (r) { clearTimeout(to); return r.json(); })
+      .then(function (j) {
+        var a = (j && j.address) || {};
+        return a.road || a.pedestrian || a.hamlet || a.village || a.suburb ||
+               a.town || a.city || a.neighbourhood || a.county || "";
+      })
+      .catch(function () { clearTimeout(to); return ""; });
+  }
+
+  function tripSummaryText(endName) {
+    var unit = $("unitSelect").value;
+    var dd = unit === "mi" ? routeMeters / 1609.344 : routeMeters / 1000;
+    var distStr = dd.toFixed(1) + (unit === "mi" ? " miles" : " km");
+    var startV = $("startInput").value;
+    var end = controlPts[controlPts.length - 1].ll;
+    var maps = "https://www.google.com/maps/search/?api=1&query=" + end.lat.toFixed(5) + "," + end.lng.toFixed(5);
+
+    var when;
+    if (isNaN(lastTotalMinutes)) {
+      when = "Time can't be estimated (current is stronger than the paddling speed).";
+    } else if (startV) {
+      var f = addToHHMM(startV, lastTotalMinutes);
+      when = "On the water " + startV + ", off around " + f.hm + (f.plusDays ? " (next day)" : "");
+    } else {
+      when = "About " + fmtTime(lastTotalMinutes) + " on the water";
+    }
+
+    return "🛶 Paddleboard trip\n" +
+      distStr + (isNaN(lastTotalMinutes) ? "" : "  ·  ~" + fmtTime(lastTotalMinutes)) +
+      (portagePts.length ? "  ·  " + portagePts.length + " portage" + (portagePts.length > 1 ? "s" : "") : "") + "\n" +
+      when + "\n\n" +
+      "Pick-up point" + (endName ? " — near " + endName : "") + ":\n" + maps + "\n\n" +
+      "Full route map:\n" + tripLink();
+  }
+
+  $("shareBtn").onclick = function () {
+    if (controlPts.length < 2) { alert("Add a put-in and a take-out first."); return; }
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = "Preparing…";
+    reverseName(controlPts[controlPts.length - 1].ll).then(function (name) {
+      btn.disabled = false;
+      btn.innerHTML = "📤 Share trip &amp; pick-up";
+      var text = tripSummaryText(name);
+      if (navigator.share) {
+        navigator.share({ title: "Paddleboard trip", text: text }).catch(function () {});
+        $("shareInfo").hidden = true;
+      } else {
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+        var info = $("shareInfo");
+        info.hidden = false;
+        info.textContent = "Copied to clipboard — send this to your lift:\n\n" + text;
+      }
+    });
+  };
+
+  function renderSharedSummary() {
+    var unit = $("unitSelect").value;
+    var dd = unit === "mi" ? routeMeters / 1609.344 : routeMeters / 1000;
+    var line = "Shared trip loaded: " + dd.toFixed(1) + (unit === "mi" ? " miles" : " km");
+    if (!isNaN(lastTotalMinutes)) line += " · ~" + fmtTime(lastTotalMinutes) + " paddling";
+    var startV = $("startInput").value;
+    if (startV && !isNaN(lastTotalMinutes)) line += " · off the water ~" + addToHHMM(startV, lastTotalMinutes).hm;
+    line += ".\nTap the red take-out marker for the pick-up location and a Maps link.";
+    var info = $("shareInfo");
+    info.hidden = false;
+    info.textContent = line;
+  }
+
+  $("moreToggle").onclick = function () {
+    var more = $("more");
+    more.hidden = !more.hidden;
+    this.innerHTML = more.hidden
+      ? "Trip settings &amp; saved routes &#9662;"
+      : "Hide settings &#9652;";
+    if (!more.hidden) renderSaved();
+  };
+
+  /* ---- geolocation ---- */
+  var meMarker = null, meCircle = null;
+  $("locateBtn").onclick = function () {
+    $("locateBtn").disabled = true;
+    map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true, timeout: 10000 });
+  };
+  map.on("locationfound", function (e) {
+    $("locateBtn").disabled = false;
+    if (meMarker) {
+      meMarker.setLatLng(e.latlng);
+      meCircle.setLatLng(e.latlng).setRadius(e.accuracy);
+    } else {
+      meMarker = L.circleMarker(e.latlng, {
+        radius: 6, color: "#0F2A2E", weight: 2, fillColor: "#3AAFA9", fillOpacity: 1
+      }).addTo(map);
+      meCircle = L.circle(e.latlng, {
+        radius: e.accuracy, color: "#3AAFA9", weight: 1, fillOpacity: 0.12
+      }).addTo(map);
+    }
+  });
+  map.on("locationerror", function (err) {
+    $("locateBtn").disabled = false;
+    alert("Couldn't get your location: " + err.message);
+  });
+
+  /* ---- search (Nominatim) ---- */
+  var results = $("searchResults");
+  $("searchForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = $("searchInput").value.trim();
+    if (!q) return;
+    results.innerHTML = '<li class="muted">Searching…</li>';
+    fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=" + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.length) { results.innerHTML = '<li class="muted">No matches found</li>'; return; }
+        results.innerHTML = "";
+        data.forEach(function (d) {
+          var li = document.createElement("li");
+          li.textContent = d.display_name;
+          li.onclick = function () {
+            if (d.boundingbox) {
+              var bb = d.boundingbox.map(Number);
+              map.fitBounds([[bb[0], bb[2]], [bb[1], bb[3]]], { maxZoom: 16 });
+            } else {
+              map.setView([+d.lat, +d.lon], 15);
+            }
+            results.innerHTML = "";
+            $("searchInput").value = d.display_name.split(",")[0];
+            $("searchInput").blur();
+          };
+          results.appendChild(li);
+        });
+      })
+      .catch(function () { results.innerHTML = '<li class="muted">Search failed — check your connection</li>'; });
+  });
+  document.addEventListener("click", function (e) {
+    if (!$("searchWrap").contains(e.target)) results.innerHTML = "";
+  });
+
+  /* ================= persistence ================= */
+  var LS_ROUTES = "rrp:routes:v3";
+  var LS_AUTO = "rrp:autosave:v3";
+  var autosaveT = null;
+
+  function serialize() {
+    return {
+      unit: $("unitSelect").value,
+      speed: $("speedInput").value,
+      current: $("currentInput").value,
+      portageMinutes: $("portageTimeInput").value,
+      startTime: $("startInput").value || "",
+      followWater: followWater,
+      route: controlPts.map(function (cp) { return [cp.ll.lat, cp.ll.lng]; }),
+      portages: portagePts.map(function (r) {
+        var ll = r.marker.getLatLng();
+        return { lat: ll.lat, lng: ll.lng, minutes: r.minutes };
+      })
+    };
+  }
+  function autosave() {
+    clearTimeout(autosaveT);
+    autosaveT = setTimeout(function () {
+      try { localStorage.setItem(LS_AUTO, JSON.stringify(serialize())); } catch (e) {}
+    }, 400);
+  }
+
+  function restore(data, fit) {
+    controlPts.splice(0).forEach(function (p) { map.removeLayer(p.marker); });
+    portagePts.splice(0).forEach(function (p) { map.removeLayer(p.marker); });
+    routedLine.setLatLngs([]); straightLine.setLatLngs([]);
+
+    if (data.unit) $("unitSelect").value = data.unit;
+    if (data.speed != null) $("speedInput").value = data.speed;
+    if (data.current != null) $("currentInput").value = data.current;
+    if (data.portageMinutes != null) $("portageTimeInput").value = data.portageMinutes;
+    if (data.startTime != null) $("startInput").value = data.startTime;
+    if (data.followWater != null) {
+      followWater = !!data.followWater;
+      $("followToggle").classList.toggle("on", followWater);
+      $("followToggle").innerHTML = "&#127754; Follow the water: " + (followWater ? "ON" : "OFF");
+    }
+
+    (data.route || []).forEach(function (c) {
+      var pt = Array.isArray(c) ? { lat: c[0], lng: c[1] } : c;
+      addControlPoint(L.latLng(pt.lat, pt.lng), { bulk: true });
+    });
+    (data.portages || []).forEach(function (p) { addPortage(L.latLng(p.lat, p.lng), p.minutes); });
+
+    if (fit) {
+      var all = controlPts.concat(portagePts).map(function (p) { return p.marker.getLatLng(); });
+      if (all.length === 1) map.setView(all[0], 14);
+      else if (all.length > 1) map.fitBounds(L.latLngBounds(all).pad(0.25));
+    }
+    scheduleRebuild();
+  }
+
+  function loadRoutes() {
+    try { return JSON.parse(localStorage.getItem(LS_ROUTES) || "[]"); } catch (e) { return []; }
+  }
+  function storeRoutes(list) {
+    try { localStorage.setItem(LS_ROUTES, JSON.stringify(list)); } catch (e) {}
+  }
+  function renderSaved() {
+    var list = loadRoutes(), ul = $("savedList");
+    ul.innerHTML = "";
+    if (!list.length) { ul.innerHTML = '<li class="muted">No saved routes yet</li>'; return; }
+    list.forEach(function (item, idx) {
+      var li = document.createElement("li");
+      var name = document.createElement("span");
+      name.className = "savedName";
+      name.innerHTML = item.name +
+        ' <span class="savedMeta">' + new Date(item.savedAt).toLocaleDateString() + "</span>";
+      name.onclick = function () { restore(item.data, true); };
+      var x = document.createElement("button");
+      x.className = "x"; x.textContent = "✕";
+      x.onclick = function () { var l = loadRoutes(); l.splice(idx, 1); storeRoutes(l); renderSaved(); };
+      li.appendChild(name); li.appendChild(x);
+      ul.appendChild(li);
+    });
+  }
+  $("saveBtn").onclick = function () {
+    if (!controlPts.length) { alert("Add some route points first."); return; }
+    var name = $("routeName").value.trim() || ("Route " + new Date().toLocaleDateString());
+    var list = loadRoutes();
+    list.unshift({ name: name, savedAt: Date.now(), data: serialize() });
+    storeRoutes(list);
+    $("routeName").value = "";
+    renderSaved();
+  };
+
+  /* ================= boot ================= */
+  var loadedFromLink = false;
+  try {
+    var hs = (location.hash || "").replace(/^#/, "");
+    var mm = /(?:^|&)r=([^&]+)/.exec(hs);
+    if (mm) {
+      var trip = decodeTrip(mm[1]);
+      if (trip && trip.route && trip.route.length) {
+        restore(trip, true);
+        pendingShareSummary = true;
+        loadedFromLink = true;
+      }
+    }
+  } catch (e) {}
+
+  if (!loadedFromLink) {
+    try {
+      var auto = JSON.parse(localStorage.getItem(LS_AUTO) || "null");
+      if (auto && ((auto.route && auto.route.length) || (auto.portages && auto.portages.length))) {
+        restore(auto, true);
+      }
+    } catch (e) {}
+  }
+
+  // default the start time to now, so the pick-up estimate works out of the box
+  if (!$("startInput").value) {
+    var n = new Date();
+    $("startInput").value = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+  }
+
+  recompute();
+  renderSaved();
+})();
+</script>
+</body>
+</html>
